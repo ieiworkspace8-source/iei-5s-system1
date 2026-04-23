@@ -296,6 +296,10 @@ td img { height: 38px; border-radius: 4px; object-fit: contain; }
         <span id="adv-text"></span>
         <p class="fail-hint">5S 稽核及格分數為 80 分，低於 80 分請重新整理環境後上傳重新評分</p>
       </div>
+      <div id="locked-hint" style="display:none; padding:16px 18px; background:#fff3cd; border-top:1px solid #ffeeba; text-align:center;">
+        <span style="font-size:15px; font-weight:600; color:#856404;">&#128274; 分數未達 80 分，無法儲存紀錄或匯出 PDF</span><br>
+        <span style="font-size:13px; color:#856404; margin-top:4px; display:block;">請重新整理現場環境後再次拍照評分</span>
+      </div>
       <div id="action-area" style="display:none;">
         <div class="pdf-action">
           <div style="font-size:13px;font-weight:600;color:#155724;margin-bottom:8px;">匯出 PDF 報表</div>
@@ -591,16 +595,22 @@ async function runAudit() {
     adv.textContent = score >= 90 ? '優：環境整潔，完全符合 5S 標準，維持現狀即可。'
                     : score >= 80 ? '佳：整體良好，部分區域仍需微調整頓，請持續改善。'
                                   : '待改善：現場環境尚未達標，請立即重新整理後再次評分。';
-    document.getElementById('action-area').style.display = 'block';
     const line = document.getElementById('sel-line');
     const lineName = line.options[line.selectedIndex]?.text || line.value;
     const date = document.getElementById('audit-date').value;
     const fname = `5S_${lineName}_${date}_${currentUser.u}.pdf`;
-    document.getElementById('pdf-fname').textContent = fname;
     window._ad = { score, adv: adv.textContent, line: lineName, lineId: line.value, date, user: currentUser.u, fname, imgS: imgS.src, imgC: imgC.src };
-    document.getElementById('save-btn').disabled = false;
-    document.getElementById('save-btn').textContent = '儲存紀錄至資料庫';
-    document.getElementById('save-btn').className = 'btn btn-blue';
+    if (score >= 80) {
+      document.getElementById('action-area').style.display = 'block';
+      document.getElementById('pdf-fname').textContent = fname;
+      document.getElementById('save-btn').disabled = false;
+      document.getElementById('save-btn').textContent = '儲存紀錄至資料庫';
+      document.getElementById('save-btn').className = 'btn btn-blue';
+      document.getElementById('locked-hint').style.display = 'none';
+    } else {
+      document.getElementById('action-area').style.display = 'none';
+      document.getElementById('locked-hint').style.display = 'block';
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = '開始 AI 評分';
