@@ -566,6 +566,16 @@ function previewCur(inp) {
   }
 }
 
+function getWeekLabel(dateStr) {
+  const d = new Date(dateStr);
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = tmp.getUTCDay() || 7;
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+  return `${tmp.getUTCFullYear()}-W${String(weekNum).padStart(2,'0')}`;
+}
+
 async function runAudit() {
   const imgS = document.getElementById('img-std');
   const imgC = document.getElementById('img-cur');
@@ -598,7 +608,8 @@ async function runAudit() {
     const line = document.getElementById('sel-line');
     const lineName = line.options[line.selectedIndex]?.text || line.value;
     const date = document.getElementById('audit-date').value;
-    const fname = `5S_${lineName}_${date}_${currentUser.u}.pdf`;
+    const weekLabel = getWeekLabel(date);
+    const fname = `5S_${lineName}_${weekLabel}_${currentUser.u}.pdf`;
     window._ad = { score, adv: adv.textContent, line: lineName, lineId: line.value, date, user: currentUser.u, fname, imgS: imgS.src, imgC: imgC.src };
     if (score >= 80) {
       document.getElementById('action-area').style.display = 'block';
@@ -638,7 +649,7 @@ async function exportPDF() {
   btn.innerHTML = '<span class="spinner"></span>產生 PDF 中...';
   try {
     document.getElementById('p-line').textContent  = '線別：' + d.line;
-    document.getElementById('p-date').textContent  = '日期：' + d.date;
+    document.getElementById('p-date').textContent  = '日期：' + d.date + '（' + getWeekLabel(d.date) + '）';
     document.getElementById('p-user').textContent  = '稽核員：' + d.user;
     document.getElementById('p-img-s').src = d.imgS;
     document.getElementById('p-img-c').src = d.imgC;
@@ -662,7 +673,7 @@ async function rePDF(idx) {
   ov('產生 PDF...');
   try {
     document.getElementById('p-line').textContent  = '線別：' + h.line;
-    document.getElementById('p-date').textContent  = '日期：' + h.date;
+    document.getElementById('p-date').textContent  = '日期：' + h.date + '（' + getWeekLabel(h.date) + '）';
     document.getElementById('p-user').textContent  = '稽核員：' + h.user;
     document.getElementById('p-score').textContent = h.score;
     document.getElementById('p-adv').textContent   = h.adv || '';
@@ -673,7 +684,7 @@ async function rePDF(idx) {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('l', 'mm', 'a4');
     pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 297, 210);
-    pdf.save(`5S_${h.line}_${h.date}_${h.user}.pdf`);
+    pdf.save(`5S_${h.line}_${getWeekLabel(h.date)}_${h.user}.pdf`);
   } finally { ovHide(); }
 }
 
