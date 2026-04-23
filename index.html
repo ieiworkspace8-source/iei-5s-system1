@@ -10,7 +10,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
 
   // ============================================================
   //  ★ 請到 firebase-config.js 填入您的 Firebase 設定
@@ -19,7 +19,6 @@
 
   const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
-  const storage = getStorage(app);
 
   // ── 帳號 ─────────────────────────────────────────────────────
   window.dbGetUsers = async () => {
@@ -29,20 +28,16 @@
   window.dbSetUser = async (u, data) => setDoc(doc(db, "users", u), data);
   window.dbDelUser = async (u) => deleteDoc(doc(db, "users", u));
 
-  // ── 線別 ─────────────────────────────────────────────────────
+  // ── 線別（圖片 base64 直存 Firestore，不需 Storage）────────────
   window.dbGetLines = async () => {
     const snap = await getDocs(collection(db, "lines"));
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   };
   window.dbAddLine = async (name, b64) => {
-    const storRef = ref(storage, `standards/${name}_${Date.now()}.jpg`);
-    await uploadString(storRef, b64, "data_url");
-    const url = await getDownloadURL(storRef);
-    return setDoc(doc(db, "lines", name), { n: name, imgUrl: url, storPath: storRef.fullPath });
+    return setDoc(doc(db, "lines", name), { n: name, imgUrl: b64 });
   };
-  window.dbDelLine = async (id, storPath) => {
+  window.dbDelLine = async (id) => {
     await deleteDoc(doc(db, "lines", id));
-    if (storPath) { try { await deleteObject(ref(storage, storPath)); } catch(e){} }
   };
 
   // ── 稽核紀錄 ─────────────────────────────────────────────────
@@ -430,7 +425,7 @@ async function renderAdmin() {
       <tr>
         <td><b>${x.n}</b></td>
         <td><img src="${x.imgUrl}" alt="${x.n}"></td>
-        <td><button class="btn btn-sm btn-red" onclick="delLine('${x.id}','${x.storPath||''}')">刪除</button></td>
+        <td><button class="btn btn-sm btn-red" onclick="delLine('${x.id}')">刪除</button></td>
       </tr>`).join('');
   } finally { ovHide(); }
 }
