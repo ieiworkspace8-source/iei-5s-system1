@@ -9,7 +9,7 @@
 <!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 
   // ============================================================
@@ -42,6 +42,8 @@
 
   // ── 稽核紀錄 ─────────────────────────────────────────────────
   window.dbAddRecord = async (rec) => addDoc(collection(db, "records"), { ...rec, ts: Date.now() });
+  window.dbUpdateRecord = async (id, data) => updateDoc(doc(db, "records", id), data);
+  window.dbDelRecord = async (id) => deleteDoc(doc(db, "records", id));
   window.dbGetRecords = async () => {
     const q = query(collection(db, "records"), orderBy("ts", "desc"));
     const snap = await getDocs(q);
@@ -236,7 +238,7 @@ td img { height: 38px; border-radius: 4px; object-fit: contain; }
           <button class="btn btn-sm btn-green" style="float:right;margin-right:6px;" onclick="exportHistCSV()">匯出 CSV</button>
         </h3>
         <table>
-          <thead><tr><th>日期</th><th>線別</th><th>稽核員</th><th>分數</th><th>結果</th><th>PDF</th></tr></thead>
+          <thead><tr><th>日期</th><th>線別</th><th>稽核員</th><th>分數</th><th>結果</th><th>備註</th><th>PDF</th><th>操作</th></tr></thead>
           <tbody id="tb-hist"></tbody>
         </table>
         <p id="hist-empty" style="text-align:center;color:#aaa;padding:20px;display:none;">尚無稽核紀錄</p>
@@ -508,10 +510,33 @@ async function loadHist() {
   } finally { ovHide(); }
 }
 
+async function saveRemark(idx, val) {
+  const h = histCache[idx];
+  if (!h || !h.id) return;
+  try {
+    // update remark field in Firestore
+    await window.dbUpdateRecord(h.id, { remark: val });
+    histCache[idx].remark = val;
+  } catch(e) { alert('備註儲存失敗：' + e.message); }
+}
+
+async function delRecord(idx) {
+  const h = histCache[idx];
+  if (!h) return;
+  if (!confirm(`確定刪除此筆紀錄？\n線別：${h.line}　日期：${h.date}　稽核員：${h.user}`)) return;
+  ov('刪除中...');
+  try {
+    await window.dbDelRecord(h.id);
+    await loadHist();
+  } catch(e) {
+    alert('刪除失敗：' + e.message);
+  } finally { ovHide(); }
+}
+
 function exportHistCSV() {
   if (!histCache.length) return alert('尚無紀錄');
-  const header = '日期,線別,稽核員,分數,結果\n';
-  const rows = histCache.map(h => `${h.date},${h.line},${h.user},${h.score},${h.score>=80?'通過':'未通過'}`).join('\n');
+  const header = '日期,線別,稽核員,分數,結果,備註\n';
+  const rows = histCache.map(h => `${h.date},${h.line},${h.user},${h.score},${h.score>=80?'通過':'未通過'},${h.remark||''}`).join('\n');
   const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
