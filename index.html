@@ -654,10 +654,17 @@ async function saveRecord() {
   if (!d) return;
   ov('儲存紀錄...');
   try {
+    // 直接從 DOM 圖片元素取得最新 src（避免 _ad 存的是舊參考）
+    const domImgS = document.getElementById('img-std').src;
+    const domImgC = document.getElementById('img-cur').src;
+    const srcS = (d.imgS && d.imgS.length > 100) ? d.imgS : domImgS;
+    const srcC = (d.imgC && d.imgC.length > 100) ? d.imgC : domImgC;
+    if (!srcS || srcS.length < 100) { alert('❌ 找不到標桿照，請重新選擇線別後再評分'); return; }
+    if (!srcC || srcC.length < 100) { alert('❌ 找不到現況照，請重新上傳照片後再評分'); return; }
     ov('壓縮照片中...');
     const [thumbS, thumbC] = await Promise.all([
-      compressThumb(d.imgS),
-      compressThumb(d.imgC)
+      compressThumb(srcS),
+      compressThumb(srcC)
     ]);
     ov('儲存紀錄...');
     const saveData = {
@@ -688,10 +695,13 @@ async function exportPDF() {
     document.getElementById('p-user').textContent  = '稽核員：' + d.user;
     document.getElementById('p-score').textContent = d.score;
     document.getElementById('p-adv').textContent   = d.adv;
-    // 顯示當下照片
+    // 顯示當下照片（優先用 _ad，fallback 用 DOM）
+    const domS = document.getElementById('img-std').src;
+    const domC = document.getElementById('img-cur').src;
     const imgS = document.getElementById('p-img-s');
     const imgC = document.getElementById('p-img-c');
-    imgS.src = d.imgS; imgC.src = d.imgC;
+    imgS.src = (d.imgS && d.imgS.length > 100) ? d.imgS : domS;
+    imgC.src = (d.imgC && d.imgC.length > 100) ? d.imgC : domC;
     imgS.style.display = 'block'; imgC.style.display = 'block';
     document.getElementById('p-no-img-s').style.display = 'none';
     document.getElementById('p-no-img-c').style.display = 'none';
