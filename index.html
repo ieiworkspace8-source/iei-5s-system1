@@ -572,13 +572,13 @@ function compressThumb(src) {
   return new Promise(res => {
     const img = new Image();
     img.onload = () => {
-      const MAX = 600;
+      const MAX = 1024;
       const ratio = Math.min(1, MAX / Math.max(img.width, img.height));
       const c = document.createElement('canvas');
       c.width  = Math.round(img.width  * ratio);
       c.height = Math.round(img.height * ratio);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      const out = c.toDataURL('image/jpeg', 0.75);
+      const out = c.toDataURL('image/jpeg', 0.88);
       const kb = Math.round(out.length * 0.75 / 1024);
       console.log(`縮圖：${c.width}x${c.height}px，約 ${kb} KB`);
       res(out);
