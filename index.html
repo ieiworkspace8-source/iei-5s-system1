@@ -331,14 +331,16 @@ td img { height: 38px; border-radius: 4px; object-fit: contain; }
   <div style="display:flex;justify-content:space-between;gap:20px;margin:16px 0;">
     <div style="flex:1;text-align:center;">
       <div style="font-size:13px;font-weight:bold;margin-bottom:6px;color:#555;">【 標準標桿照 】</div>
-      <div style="width:100%;height:290px;border:2px solid #333;overflow:hidden;">
+      <div style="width:100%;height:290px;border:2px solid #333;overflow:hidden;position:relative;">
         <img id="p-img-s" style="width:100%;height:100%;object-fit:contain;">
+        <div id="p-no-img-s" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:#f5f5f5;color:#999;font-size:14px;">照片未儲存</div>
       </div>
     </div>
     <div style="flex:1;text-align:center;">
       <div style="font-size:13px;font-weight:bold;margin-bottom:6px;color:#555;">【 現場現況照 】</div>
-      <div style="width:100%;height:290px;border:2px solid #333;overflow:hidden;">
+      <div style="width:100%;height:290px;border:2px solid #333;overflow:hidden;position:relative;">
         <img id="p-img-c" style="width:100%;height:100%;object-fit:contain;">
+        <div id="p-no-img-c" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:#f5f5f5;color:#999;font-size:14px;">照片未儲存</div>
       </div>
     </div>
   </div>
@@ -633,11 +635,15 @@ async function saveRecord() {
   if (!d) return;
   ov('儲存紀錄...');
   try {
-    await window.dbAddRecord(d);
+    const saveData = { score: d.score, adv: d.adv, line: d.line, lineId: d.lineId, date: d.date, user: d.user, fname: d.fname };
+    await window.dbAddRecord(saveData);
     const btn = document.getElementById('save-btn');
     btn.textContent = '✓ 已儲存至資料庫';
     btn.disabled = true;
     btn.className = 'btn btn-gray';
+  } catch(e) {
+    ovHide();
+    alert('❌ 儲存失敗：' + (e.message || e));
   } finally { ovHide(); }
 }
 
@@ -651,10 +657,15 @@ async function exportPDF() {
     document.getElementById('p-line').textContent  = '線別：' + d.line;
     document.getElementById('p-date').textContent  = '日期：' + d.date + '（' + getWeekLabel(d.date) + '）';
     document.getElementById('p-user').textContent  = '稽核員：' + d.user;
-    document.getElementById('p-img-s').src = d.imgS;
-    document.getElementById('p-img-c').src = d.imgC;
     document.getElementById('p-score').textContent = d.score;
     document.getElementById('p-adv').textContent   = d.adv;
+    // 顯示當下照片
+    const imgS = document.getElementById('p-img-s');
+    const imgC = document.getElementById('p-img-c');
+    imgS.src = d.imgS; imgC.src = d.imgC;
+    imgS.style.display = 'block'; imgC.style.display = 'block';
+    document.getElementById('p-no-img-s').style.display = 'none';
+    document.getElementById('p-no-img-c').style.display = 'none';
     await new Promise(r => setTimeout(r, 400));
     const canvas = await html2canvas(document.getElementById('pdf-tpl'), { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
     const { jsPDF } = window.jspdf;
@@ -677,14 +688,23 @@ async function rePDF(idx) {
     document.getElementById('p-user').textContent  = '稽核員：' + h.user;
     document.getElementById('p-score').textContent = h.score;
     document.getElementById('p-adv').textContent   = h.adv || '';
-    document.getElementById('p-img-s').src = h.imgS || '';
-    document.getElementById('p-img-c').src = h.imgC || '';
+    // 歷史紀錄不儲存照片，顯示提示文字
+    const imgS = document.getElementById('p-img-s');
+    const imgC = document.getElementById('p-img-c');
+    imgS.src = ''; imgC.src = '';
+    imgS.alt = '（照片未儲存）'; imgC.alt = '（照片未儲存）';
+    imgS.style.display = 'none'; imgC.style.display = 'none';
+    document.getElementById('p-no-img-s').style.display = 'flex';
+    document.getElementById('p-no-img-c').style.display = 'flex';
     await new Promise(r => setTimeout(r, 400));
     const canvas = await html2canvas(document.getElementById('pdf-tpl'), { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' });
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('l', 'mm', 'a4');
     pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 297, 210);
     pdf.save(`5S_${h.line}_${getWeekLabel(h.date)}_${h.user}.pdf`);
+    imgS.style.display = ''; imgC.style.display = '';
+    document.getElementById('p-no-img-s').style.display = 'none';
+    document.getElementById('p-no-img-c').style.display = 'none';
   } finally { ovHide(); }
 }
 
