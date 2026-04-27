@@ -499,13 +499,19 @@ async function loadHist() {
     if (!histCache.length) { tb.innerHTML = ''; em.style.display = 'block'; return; }
     em.style.display = 'none';
     tb.innerHTML = histCache.map((h, i) => `
-      <tr>
+      <tr id="hist-row-${i}">
         <td>${h.date}</td>
         <td>${h.line}</td>
         <td>${h.user}</td>
         <td>${h.score}</td>
         <td><span class="badge ${h.score >= 80 ? 'badge-pass' : 'badge-fail'}">${h.score >= 80 ? '通過' : '未通過'}</span></td>
+        <td>
+          <input type="text" value="${h.remark||''}" placeholder="輸入備註..."
+            style="width:100%;min-width:110px;padding:4px 8px;font-size:12px;border:1px solid #ddd;border-radius:4px;"
+            onchange="saveRemark(${i}, this.value)">
+        </td>
         <td><button class="btn btn-sm btn-blue" onclick="rePDF(${i})">下載 PDF</button></td>
+        <td><button class="btn btn-sm btn-red" onclick="delRecord(${i})">刪除</button></td>
       </tr>`).join('');
   } finally { ovHide(); }
 }
