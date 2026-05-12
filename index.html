@@ -6,6 +6,7 @@
 <title>IEI 5S AI 智慧評分系統</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -243,6 +244,28 @@ td img { height: 38px; border-radius: 4px; object-fit: contain; }
         </table>
         <p id="hist-empty" style="text-align:center;color:#aaa;padding:20px;display:none;">尚無稽核紀錄</p>
       </div>
+
+      <!-- ── 週分數曲線圖（僅 admin 可見）── -->
+      <div id="admin-chart-card" class="card" style="display:none; margin-top:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <h3 style="margin:0;">各線別週分數趨勢</h3>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="font-size:13px;color:#666;">顯示週數：</label>
+            <select id="chart-week-range" style="width:auto;margin:0;padding:5px 10px;font-size:13px;" onchange="renderWeeklyChart()">
+              <option value="4">最近 4 週</option>
+              <option value="8" selected>最近 8 週</option>
+              <option value="12">最近 12 週</option>
+              <option value="0">全部</option>
+            </select>
+          </div>
+        </div>
+        <div id="chart-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;font-size:13px;color:#555;"></div>
+        <div style="position:relative;width:100%;height:300px;">
+          <canvas id="weekly-score-chart"></canvas>
+        </div>
+        <p id="chart-no-data" style="display:none;text-align:center;color:#aaa;padding:20px;">稽核紀錄不足，無法產生圖表</p>
+      </div>
+
     </div>
   </div>
 </div>
@@ -496,7 +519,7 @@ async function loadHist() {
     histCache = await window.dbGetRecords();
     const tb = document.getElementById('tb-hist');
     const em = document.getElementById('hist-empty');
-    if (!histCache.length) { tb.innerHTML = ''; em.style.display = 'block'; return; }
+    if (!histCache.length) { tb.innerHTML = ''; em.style.display = 'block'; renderWeeklyChart(); return; }
     em.style.display = 'none';
     tb.innerHTML = histCache.map((h, i) => `
       <tr id="hist-row-${i}">
@@ -513,6 +536,7 @@ async function loadHist() {
         <td><button class="btn btn-sm btn-blue" onclick="rePDF(${i})">下載 PDF</button></td>
         <td><button class="btn btn-sm btn-red" onclick="delRecord(${i})">刪除</button></td>
       </tr>`).join('');
+    renderWeeklyChart();
   } finally { ovHide(); }
 }
 
@@ -803,6 +827,95 @@ async function calcSSIM(i1, i2) {
     ((a.mu**2 + b.mu**2 + 6.5) * (a.var + b.var + 58.5))
   ));
 }
+
+// ── 週分數曲線圖（僅 admin）────────────────────────────────────────────
+(function() {
+  const LINE_COLORS = [
+    { b: '#005596', bg: 'rgba(0,85,150,0.10)' },
+    { b: '#28a745', bg: 'rgba(40,167,69,0.10)' },
+    { b: '#f59e0b', bg: 'rgba(245,158,11,0.10)' },
+    { b: '#d9534f', bg: 'rgba(217,83,79,0.10)'  },
+    { b: '#8b5cf6', bg: 'rgba(139,92,246,0.10)' },
+    { b: '#06b6d4', bg: 'rgba(6,182,212,0.10)'  },
+    { b: '#f97316', bg: 'rgba(249,115,22,0.10)' },
+    { b: '#ec4899', bg: 'rgba(236,72,153,0.10)' },
+  ];
+  let chartInst = null;
+
+  window.renderWeeklyChart = function() {
+    const card   = document.getElementById('admin-chart-card');
+    const canvas = document.getElementById('weekly-score-chart');
+    const noData = document.getElementById('chart-no-data');
+    const legend = document.getElementById('chart-legend');
+    const select = document.getElementById('chart-week-range');
+    if (!card) return;
+    if (!currentUser || currentUser.role !== 'admin') { card.style.display = 'none'; return; }
+    card.style.display = 'block';
+
+    const records = histCache;
+    if (!records || !records.length) {
+      canvas.style.display = 'none'; noData.style.display = 'block'; legend.innerHTML = ''; return;
+    }
+    const weekLimit = parseInt(select.value) || 0;
+    const lineWeekMap = {}; const allWeeks = new Set();
+    records.forEach(r => {
+      if (!r.line || r.score == null || !r.date) return;
+      const wk = getWeekLabel(r.date);
+      if (!lineWeekMap[r.line]) lineWeekMap[r.line] = {};
+      if (!lineWeekMap[r.line][wk]) lineWeekMap[r.line][wk] = [];
+      lineWeekMap[r.line][wk].push(Number(r.score));
+      allWeeks.add(wk);
+    });
+    let sortedWeeks = [...allWeeks].sort();
+    if (weekLimit > 0) sortedWeeks = sortedWeeks.slice(-weekLimit);
+    if (!sortedWeeks.length) { canvas.style.display = 'none'; noData.style.display = 'block'; return; }
+    canvas.style.display = 'block'; noData.style.display = 'none';
+
+    const lines = Object.keys(lineWeekMap).sort();
+    const xLabels = sortedWeeks.map(w => { const [y,wP] = w.split('-W'); return y + ' W' + parseInt(wP); });
+    const datasets = lines.map((line, i) => {
+      const c = LINE_COLORS[i % LINE_COLORS.length];
+      return {
+        label: line,
+        data: sortedWeeks.map(wk => {
+          const arr = lineWeekMap[line][wk];
+          return arr ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+        }),
+        borderColor: c.b, backgroundColor: c.bg, borderWidth: 2.5,
+        pointBackgroundColor: c.b, pointRadius: 5, pointHoverRadius: 7,
+        tension: 0.3, fill: false, spanGaps: true,
+      };
+    });
+
+    legend.innerHTML = datasets.map(ds =>
+      `<span style="display:flex;align-items:center;gap:5px;">
+        <span style="width:16px;height:3px;border-radius:2px;background:${ds.borderColor};display:inline-block;"></span>
+        <span>${ds.label}</span>
+      </span>`
+    ).join('');
+
+    if (chartInst) { chartInst.destroy(); chartInst = null; }
+    chartInst = new Chart(canvas, {
+      type: 'line',
+      data: { labels: xLabels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: { label: item => ' ' + item.dataset.label + '：' + (item.raw == null ? '—' : item.raw + ' 分') },
+            backgroundColor: '#1e293b', titleColor: '#fff', bodyColor: '#cbd5e1', padding: 10, cornerRadius: 8,
+          },
+        },
+        scales: {
+          x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 12 }, color: '#888', maxRotation: 35 } },
+          y: { min: 60, max: 100, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 12 }, color: '#888', callback: v => v + ' 分' } },
+        },
+      },
+    });
+  };
+})();
 
 function compressImg(file, maxW, quality) {
   maxW = maxW || 480;
